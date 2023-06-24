@@ -7,6 +7,7 @@ use App\Http\Requests\RenameRequest;
 use App\Http\Requests\Request;
 use App\Http\Requests\UploadRequest;
 use App\Models\Accesses;
+use App\Models\File;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 
@@ -51,12 +52,13 @@ class FileController extends Controller
         return $this->json(['success' => true, 'message' => 'File deleted']);
     }
 
-    public function access(Request $req) {
-        $users = [['fullname' => $req->user->name, 'email' => $req->user->email, 'type' => 'author']];
-        foreach ($req->file->refresh()->accessed->all() as $user) {
+    public function accesses(Request $req, $file = null, $users = null) {
+        $file = $file ?: $req->file;
+        $users = $users ?: [['fullname' => $req->user->name, 'email' => $req->user->email, 'type' => 'author']];
+        foreach ($file->refresh()->accessed->all() as $user) {
             $users[] = ['fullname' => $user->name, 'email' => $user->email, 'type' => 'co-author'];
         }
-        return $this->json(['success' => true, 'access' => $users]);
+        return $users;
     }
 
     public function grant(PermissionRequest $req) {
@@ -64,7 +66,7 @@ class FileController extends Controller
             return $this->json(['success' => false, 'message' => "Couldn't grant permission to file " . $req->file->name . " to user " . $req->email]);
         $user = User::where('email', $req->email)->first();
         Accesses::create(['user_ref' => $user->id, 'file_ref' => $req->file->id]);
-        return $this->access($req);
+        return $this->json($this->accesses($req));
     }
 
     public function forbid(PermissionRequest $req) {
@@ -72,7 +74,34 @@ class FileController extends Controller
             return $this->json(['success' => false, 'message' => "Couldn't forbid file " . $req->file->name . " to user " . $req->email]);
         $user = User::where('email', $req->email)->first();
         Accesses::where(['user_ref' => $user->id, 'file_ref' => $req->file->id])->delete();
-        return $this->access($req);
+        return $this->json($this->accesses($req));
+    }
 
+    public function listOwnedFiles(Request $req) {
+        $files = [];
+        foreach(File::where("author_ref", $req->user->id)->get() as $file) {
+            $files[] = [
+                'file_id' => $file->hash,
+                'name' => $file->name,
+                'url' => request()->getSchemeAndHttpHost() . '/files/' . $file->hash,
+                'accesses' => $this->accesses($req, $file)
+            ];
+        }
+
+        return $this->json($files);
+    }
+
+    public function listAccessedFiles(Request $req) {
+        $files = [];
+        foreach(Accesses::where("user_ref", $req->user->id)->get() as $access) {
+            $file = $access->file;
+            $files[] = [
+                'file_id' => $file->hash,
+                'name' => $file->name,
+                'url' => request()->getSchemeAndHttpHost() . '/files/' . $file->hash,
+            ];
+        }
+
+        return $this->json($files);
     }
 }

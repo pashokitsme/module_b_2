@@ -24,14 +24,18 @@ Route::post("logout", [UserController::class, "logout"]);
 
 Route::prefix("files")->middleware("auth")->group(function() {
    Route::post("/", [FileController::class, "upload"]);
+    Route::get('/disk', [FileController::class, 'listOwnedFiles']);
+    Route::get('/shared', [FileController::class, 'listAccessedFiles']);
    Route::get("/{hash}", [FileController::class, "index"]);
+
 
    Route::prefix('/{hash}')->middleware(GetFile::class)->group(function() {
        Route::patch('/', [FileController::class, 'rename']);
        Route::delete('/', [FileController::class, 'delete']);
-       Route::get('/access', [FileController::class, 'access']);
+       Route::get('/access', [FileController::class, 'accesses']);
        Route::post('/access', [FileController::class, 'grant']);
        Route::delete('/access', [FileController::class, 'forbid']);
    });
+
 
 });
